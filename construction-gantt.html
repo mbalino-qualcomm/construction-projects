@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Construction Projects – Gantt by Region</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#0f1117;color:#e0e0e0;min-height:100vh}
+
+  /* ── Header ── */
+  .header{background:linear-gradient(135deg,#1a1f35 0%,#0d1526 100%);padding:22px 32px;border-bottom:2px solid #2a3a5c;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .header h1{font-size:1.45rem;font-weight:700;color:#fff;letter-spacing:.5px}
+  .header .sub{font-size:.82rem;color:#8a9ac0;margin-top:4px}
+  .today-badge{background:#e74c3c;color:#fff;border-radius:20px;padding:5px 14px;font-size:.78rem;font-weight:600}
+
+  /* ── KPI strip ── */
+  .kpis{display:flex;gap:14px;padding:16px 32px;background:#131720;border-bottom:1px solid #1e2a40;flex-wrap:wrap}
+  .kpi{background:#1a2235;border:1px solid #2a3a5c;border-radius:10px;padding:12px 20px;flex:1;min-width:140px;text-align:center}
+  .kpi .val{font-size:1.4rem;font-weight:700;color:#4fc3f7}
+  .kpi .lbl{font-size:.72rem;color:#7a8aaa;margin-top:4px;text-transform:uppercase;letter-spacing:.6px}
+
+  /* ── Controls ── */
+  .controls{display:flex;gap:10px;padding:14px 32px;background:#0f1117;flex-wrap:wrap;align-items:center;border-bottom:1px solid #1e2a40}
+  .controls input,.controls select{background:#1a2235;border:1px solid #2a3a5c;color:#e0e0e0;border-radius:7px;padding:7px 12px;font-size:.82rem;outline:none}
+  .controls input:focus,.controls select:focus{border-color:#4fc3f7}
+  .controls label{font-size:.8rem;color:#8a9ac0}
+  .btn{background:#1e3a5f;border:1px solid #2a5080;color:#7ec8e3;border-radius:7px;padding:7px 14px;font-size:.8rem;cursor:pointer;transition:.2s}
+  .btn:hover{background:#2a4e7a;color:#fff}
+  .btn.active{background:#2563ab;color:#fff;border-color:#4fc3f7}
+
+  /* ── Region section ── */
+  .region-block{margin:0}
+  .region-header{display:flex;align-items:center;gap:10px;padding:10px 32px;background:#131720;border-top:2px solid;cursor:pointer;user-select:none;position:sticky;top:0;z-index:10}
+  .region-header h2{font-size:.95rem;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+  .region-header .cnt{font-size:.75rem;background:rgba(255,255,255,.1);border-radius:12px;padding:2px 10px}
+  .region-header .bgt{font-size:.75rem;margin-left:auto;color:#aaa}
+  .chevron{font-size:.7rem;transition:.25s;margin-left:4px}
+  .region-body{overflow:hidden;transition:max-height .35s ease}
+
+  /* ── Gantt ── */
+  .gantt-wrap{overflow-x:auto;background:#0f1117;padding:0 32px 12px}
+  .gantt-inner{min-width:900px}
+  .gantt-header{display:flex;margin-bottom:4px}
+  .gantt-labels{width:320px;min-width:320px;flex-shrink:0}
+  .gantt-timeline{flex:1;display:flex;border-bottom:1px solid #2a3a5c}
+  .gantt-month{font-size:.65rem;color:#5a6a8a;text-align:center;border-left:1px solid #1e2a40;padding:3px 0;white-space:nowrap;overflow:hidden}
+
+  .gantt-row{display:flex;align-items:center;min-height:32px;border-bottom:1px solid #161c28}
+  .gantt-row:hover{background:rgba(79,195,247,.05)}
+  .gantt-label{width:320px;min-width:320px;flex-shrink:0;padding:4px 8px;font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+  .gantt-label .pid{font-size:.65rem;color:#5a7a9a;min-width:68px}
+  .gantt-label .pname{color:#c8d8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gantt-bar-area{flex:1;position:relative;height:32px;display:flex;align-items:center}
+  .gantt-bar{position:absolute;height:16px;border-radius:4px;cursor:pointer;transition:.15s;display:flex;align-items:center;overflow:hidden;min-width:4px}
+  .gantt-bar:hover{opacity:.85;transform:scaleY(1.15)}
+  .gantt-bar .inv-fill{position:absolute;left:0;top:0;height:100%;background:rgba(0,0,0,.35);border-radius:4px 0 0 4px}
+  .gantt-bar .bar-label{position:relative;z-index:1;padding:0 5px;font-size:.62rem;color:rgba(255,255,255,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .today-line{position:absolute;top:0;bottom:0;width:2px;background:#e74c3c;z-index:20;pointer-events:none}
+  .today-line::before{content:'TODAY';position:absolute;top:-18px;left:-18px;font-size:.55rem;color:#e74c3c;font-weight:700;white-space:nowrap}
+
+  /* Phase badges */
+  .phase-badge{display:inline-block;border-radius:3px;padding:1px 5px;font-size:.6rem;font-weight:600;white-space:nowrap;flex-shrink:0}
+
+  /* ── Tooltip ── */
+  #tooltip{position:fixed;background:#1a2235;border:1px solid #2a5080;border-radius:10px;padding:12px 16px;font-size:.78rem;pointer-events:none;display:none;z-index:9999;max-width:300px;box-shadow:0 8px 32px rgba(0,0,0,.6)}
+  #tooltip .tt-title{font-weight:700;font-size:.85rem;color:#7ec8e3;margin-bottom:8px;border-bottom:1px solid #2a3a5c;padding-bottom:6px}
+  #tooltip .tt-row{display:flex;justify-content:space-between;gap:12px;margin:3px 0}
+  #tooltip .tt-key{color:#7a8aaa}
+  #tooltip .tt-val{color:#e0e0e0;text-align:right}
+
+  /* ── Legend ── */
+  .legend{display:flex;flex-wrap:wrap;gap:10px;padding:12px 32px;background:#0f1117;border-top:1px solid #1e2a40}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:.75rem;color:#8a9ac0}
+  .legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+  /* ── Summary table ── */
+  .table-section{padding:24px 32px}
+  .section-title{font-size:1rem;font-weight:700;color:#4fc3f7;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #1e2a40}
+  table{width:100%;border-collapse:collapse;font-size:.76rem}
+  thead tr{background:#1a2235}
+  th{padding:9px 10px;text-align:left;color:#7ec8e3;font-weight:600;white-space:nowrap;border-bottom:2px solid #2a3a5c}
+  td{padding:8px 10px;border-bottom:1px solid #161c28;vertical-align:middle}
+  tr:hover td{background:rgba(79,195,247,.04)}
+  .num{text-align:right}
+  .progress-cell{min-width:80px}
+  .progress-bg{background:#1e2a40;border-radius:4px;height:7px;overflow:hidden}
+  .progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#2ecc71,#27ae60)}
+
+  /* region color vars */
+  .r-AMERICAS{border-color:#3498db!important} .r-AMERICAS .cnt{background:#1a3a5c} .r-AMERICAS h2{color:#3498db}
+  .r-APAC-N{border-color:#9b59b6!important}   .r-APAC-N   .cnt{background:#2a1a40} .r-APAC-N h2{color:#9b59b6}
+  .r-APAC-S{border-color:#e67e22!important}   .r-APAC-S   .cnt{background:#3a2010} .r-APAC-S h2{color:#e67e22}
+  .r-EMEA{border-color:#2ecc71!important}      .r-EMEA     .cnt{background:#0a2a18} .r-EMEA h2{color:#2ecc71}
+
+  ::-webkit-scrollbar{height:6px;width:6px} ::-webkit-scrollbar-track{background:#0f1117} ::-webkit-scrollbar-thumb{background:#2a3a5c;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🏗️ Construction Projects Portfolio — Gantt Timeline by Region</h1>
+    <div class="sub">FY26 onwards · As of July 29, 2026 · 63 Active Projects</div>
+  </div>
+  <div class="today-badge">📅 TODAY: Jul 29, 2026</div>
+</div>
+
+<div class="kpis" id="kpiStrip"></div>
+
+<div class="controls">
+  <label>🔍&nbsp;<input type="text" id="searchBox" placeholder="Search project / ID / manager…" style="width:220px"></label>
+  <label>Phase&nbsp;<select id="phaseFilter"><option value="">All Phases</option></select></label>
+  <label>Region&nbsp;<select id="regionFilter"><option value="">All Regions</option></select></label>
+  <label>Manager&nbsp;<select id="mgrFilter"><option value="">All Managers</option></select></label>
+  <button class="btn" onclick="resetFilters()">↺ Reset</button>
+  <button class="btn" id="toggleAll" onclick="toggleAllRegions()">⊟ Collapse All</button>
+</div>
+
+<div id="ganttContainer"></div>
+<div class="legend" id="legendBox"></div>
+<div class="table-section">
+  <div class="section-title">📋 Full Project Register</div>
+  <table id="regTable">
+    <thead><tr>
+      <th>Project ID</th><th>Project Name</th><th>Region</th><th>Phase</th>
+      <th>Manager</th><th>Start</th><th>Est. Occupancy</th><th>CIP Close</th>
+      <th class="num">Est. Budget (USD)</th><th class="num">Invoiced (USD)</th>
+      <th>% Invoiced</th><th class="num">Sq Ft</th><th>Classification</th>
+    </tr></thead>
+    <tbody id="regBody"></tbody>
+  </table>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const PROJECTS = [{"id": "27850", "name": "SAN.N-5,6 Flr Offices & 4th Floor Upgrades", "phase": "Closeout", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2025-07-16", "end": "2026-03-09", "constStart": "2025-11-17", "cipClose": null, "budget": 1450000, "invoiced": 744957, "pct": 51.4, "sqft": 7500, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch-QREF; GC-CBI) - Closeout in Process"}, {"id": "28019", "name": "HNCHU.B DDR (ROLAS Project)", "phase": "Construction", "manager": "\u2014", "region": "APAC N", "start": "2025-12-30", "end": "2026-05-05", "constStart": "2026-01-09", "cipClose": "2026-09-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "TWD", "class": "CIP", "status": ""}, {"id": "NC25-0003", "name": "VIETN.F 502-503 office expansion project", "phase": "Construction", "manager": "\u2014", "region": "APAC S", "start": "2025-11-26", "end": "2026-05-15", "constStart": "2025-12-18", "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 2766, "currency": "VND", "class": "NON-CIP", "status": ""}, {"id": "26862", "name": "SAN.N-015B QDC Buildout", "phase": "Closeout", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2025-04-15", "end": "2026-05-25", "constStart": "2025-08-25", "cipClose": "2026-05-04", "budget": 4690000, "invoiced": 2251580, "pct": 48.0, "sqft": 3063, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch- Delawie; GC- Swinerton) - Closeout in Process"}, {"id": "28210", "name": "SHEZNE 3D Xray Lab build-out project", "phase": "Construction", "manager": "\u2014", "region": "APAC N", "start": "2026-02-23", "end": "2026-05-29", "constStart": "2026-03-01", "cipClose": "2026-09-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 463, "currency": "CNY", "class": "CIP", "status": ""}, {"id": "25732", "name": "CHD.C UPS - AC Replacement", "phase": "Construction", "manager": "Amanda Arnett", "region": "APAC N", "start": "2025-09-01", "end": "2026-06-10", "constStart": "2025-12-01", "cipClose": null, "budget": 600000, "invoiced": 190459, "pct": 31.7, "sqft": 0, "currency": "USD", "class": "CIP", "status": "07/07/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) Startup date pending Ingersoll Rand's response.  Request sent on 7/2 to IR.  Punch walk scheduled for 7/13.\n\n06/23/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) Compressor scope in progress and Ingersoll Rand startup being scheduled once install checklist is completed this week.\n\n06/09/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) Compressor scope in progress and Ingersoll Rand startup being scheduled for 6/15 pending their availability confirmation. \n\n05/26/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) Compressor scope started last week and updated completion date 6/10. \n\n05/12/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) UPS scope complete. Compressor dryer replacement ESD is 5/15. Compressor scope starting this week and aiming to be complete by end of May. \n\n03/31/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) Sass UPS scope work ongoing. Schneider startup scheduled for 4/2 and 4/9. Completion of all scope end of April. \n\n03/17/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) RAM UPS scope completed. Sass to start 3/23. Schneider startup availability will push shutdown and Compressor scope start by 1 week. Completion end of April. \n\n02/17/2026 AA (Design: Delawie GC: RAM, Electrical for UPS scope: Sass) UPS equipment received, including PDU. Compressor equipment tracking for 3rd/4th week of February. RAM contract in their court for signature, Sass PO req routing through Unifier. \n\n02/03/2026 AA (Design: Delawie GC: RAM) UPS equipment to be received 1st/2nd week of February. PDU for MDF UPS is now delayed until beginning of March. Compressor equipment tracking for 3rd/4th week of February. RAM draft contract in their court for review. \n\n01/20/2026 AA (Design: Delawie GC: RAM) UPS equipment to be received 1st/2nd week of February.  Compressor equipment tracking for 3rd/4th week of February. RAM PO routing through workflow. \n\n01/06/2026 AA (Design: Delawie GC: RAM) Schneider PO executed and lead times tracking for UPS equipment to be received 1st/2nd week of February.  RAM PO routing through workflow. \n\n12/09/2025 AA (Design: Delawie GC: RAM) Schneider UPS PO routing. Awaiting updated lead times from Schneider for the UPS equipment to determine start date, but the PO needs to be executed in order to confirm lead times. RAM Req submitted 12/8 for processing. \n\n11/25/2025 AA (Design: Delawie GC: RAM) Budget approved and PO reqs submitted for equipment.  RAM proposal received, but working on updated schedule before submitted REQ. Awaiting updated lead times from Schneider for the UPS equipment to determine start date, but the PO needs to be executed in order to confirm lead times. \n\n11/11/2025 AA (Design: Delawie GC: RAM) Budget approved and PO reqs submitted for equipment.  RAM proposal pending updates from RAM team. Awaiting updated lead times from Schneider for the UPS equipment to determine start date. \n\n10/28/2025 AA (Design: Delawie GC: RAM) Project pending budget approval in Unifier. \n\n10/14/2025 AA (Design: Delawie GC: RAM) Budget submitted in Unifier and routing through the review process. Project includes both the UPS and Compressor replacement and aiming to be complete by January 2026. \n\n09/16/2025 AA (Design: Delawie GC: RAM) Budget submitted in Unifier and routing through the review process. Project includes both the UPS and Compressor replacement and aiming to be complete by January 2026. \n\n09/02/2025 AA (Design: Delawie GC: RAM) SOW's routed to RAM for pricing.  Budget to be submitted in Unifier this week. Project includes both the UPS and Compressor replacement. "}, {"id": "27987", "name": "TAIWN.J 4th, 7th and 13th floor office expansion", "phase": "Construction", "manager": "\u2014", "region": "APAC N", "start": "2025-12-02", "end": "2026-06-12", "constStart": "2026-01-09", "cipClose": "2026-09-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 15203, "currency": "TWD", "class": "CIP", "status": ""}, {"id": "NC25-0002", "name": "HANOI.A OFFICE EXPANSION ON 15TH FLOOR", "phase": "Construction", "manager": "\u2014", "region": "APAC S", "start": "2025-11-03", "end": "2026-06-15", "constStart": "2025-12-05", "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "VND", "class": "NON-CIP", "status": ""}, {"id": "28530", "name": "TRNTO.A Integration Upgrades", "phase": "Construction", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2025-12-22", "end": "2026-06-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "CAD", "class": "CIP", "status": "07/21 - Qualnet integration 100% Completed with QREF and IT. Security is working on Card Reader / Camera"}, {"id": "29738", "name": "SAN.BC Robotics Lab", "phase": "Construction", "manager": "\u2014", "region": "AMERICAS", "start": "2026-07-06", "end": "2026-07-30", "constStart": "2026-11-02", "cipClose": "2027-09-30", "budget": 4000000, "invoiced": 0, "pct": 0.0, "sqft": 1, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch- Ware Malcomb; GC- CBI) - Construction and SD in Process [Phase-0 construction completion is 7/31, SD in process for Phase-1]"}, {"id": "TBD 20260406", "name": "TIJNA.A -104 Lab Reconfiguration", "phase": "Cancelled", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2026-03-18", "end": "2026-08-03", "constStart": "2026-06-01", "cipClose": "2026-10-30", "budget": 250000, "invoiced": 0, "pct": 0.0, "sqft": 0, "currency": "USD", "class": "CIP", "status": "05/29/26 YC (GC:SEICA) PO issued under TIJNA.A GF5 Santa Fe project. This project can be cancelled."}, {"id": "28451", "name": "SCL.G Purchase Alterations", "phase": "Construction", "manager": "Amanda Arnett", "region": "AMERICAS", "start": "2026-02-09", "end": "2026-08-24", "constStart": "2026-02-16", "cipClose": null, "budget": 2500000, "invoiced": 1748925, "pct": 70.0, "sqft": 12143, "currency": "USD", "class": "CIP", "status": "07/07/26 AA (D/B Arch:KA GC:SC Builders) Tied to SCL.G Ph2 TI contract with a 6/1 completion date. Most building purchase scope completed already. Day 2 scope - paint portions of the building exterior and roof screen repairs anticipated to be complete by mid July. \n\n06/23/26 AA (D/B Arch:KA GC:SC Builders) Tied to SCL.G Ph2 TI contract with a 6/1 completion date. Most building purchase scope completed already. Day 2 scope - paint portions of the building exterior as discussed with team during punch walk anticipated to be complete by end of June. \n\n06/09/26 AA (D/B Arch:KA GC:SC Builders) Tied to SCL.G Ph2 TI contract with a 6/1 completion date. Most building purchase scope completed already. Day 2 scope - paint portions of the building exterior as discussed with team during punch walk anticipated to be complete by end of June. \n\n05/26/26 AA (D/B Arch:KA GC:SC Builders) Tied to SCL.G Ph2 TI contract with a 6/1 completion date. Most building purchase scope completed already. Day 2 scope - paint portions of the building exterior as discussed with team during punch walk. \n\n05/12/26 AA (D/B Arch:KA GC:SC Builders) Tied to SCL.G Ph2 TI contract with a 6/1 completion date. Most building purchase scope completed already. Punch walk scheduled for 5/18.\n\n03/31/26 AA (D/B Arch:KA GC:SC Builders) Budget approved 3/4. SC Builders PO req submitted 3/4 and in final stage of workflow - will be tied to SCL.G Ph2 TI contract. \n\n03/17/26 AA (D/B Arch:KA GC:SC Builders) Budget approved 3/4. SC Builders PO req submitted 3/4 and routing - will be tied to SCL.G Ph2 TI contract. \n\n02/17/26 AA (D/B Arch:KA GC:SC Builders) Budget submitted 1/9 for review/approval. SC Builders PO req ready to submit once budget is approved. \n\n02/03/26 AA (D/B Arch:KA GC:SC Builders) Budget submitted 1/9 for review/approval. SC Builders PO req ready to submit once budget is approved. \n\n01/20/26 AA (D/B Arch:KA GC:SC Builders) Budget submitted 1/9 for review/approval. SC Builders PO req ready to submit once budget is approved. "}, {"id": "28528", "name": "SJO.H Integration Upgrades", "phase": "Construction", "manager": "Amanda Arnett", "region": "AMERICAS", "start": "2026-02-27", "end": "2026-08-31", "constStart": null, "cipClose": null, "budget": 1300000, "invoiced": 22750, "pct": 1.8, "sqft": 0, "currency": "USD", "class": "CIP", "status": "07/07/2026 AA (DB Team: SC Builders): Densification scope is remaining and dependent on the furniture delivery date.  Will start electrical scope 3 weeks before delivery of furniture. \n\n06/23/2026 AA (DB Team: SC Builders): Scope to support the IT integration completed 6/8. AV integration scope scheduled for the next three weeks. Scope related to densification in planning while the furniture order is being finalized. \n\n06/09/2026 AA (DB Team: SC Builders): Scope to support the IT integration completed 6/8. Scope related to densification in planning. \n\n05/26/2026 AA (DB Team: SC Builders): SCB Contract/PO executed. Construction started 5/18 for scope to support the IT integration. Scope related to densification in planning. \n\n05/12/2026 AA (DB Team: SC Builders): Budget approved 4/28. SCB Contract/PO in process. Drawings complete and approved for expedited City review. City meeting scheduled for 5/13.\n\n03/17/2026 AA (DB Team: SC Builders): Finalizing scope/budget with all integration team members. Aiming to submit budget deck by 4/3. "}, {"id": "28144", "name": "SAN.AF Swing Space Refresh", "phase": "Construction", "manager": "Emmanuel Bageris", "region": "AMERICAS", "start": "2026-01-22", "end": "2026-09-01", "constStart": "2026-06-01", "cipClose": null, "budget": 1100000, "invoiced": 94946, "pct": 8.6, "sqft": 20000, "currency": "USD", "class": "CIP", "status": "6/30/26 EB (Arch: Delawie, GC: DCT) NTP and PO released. In Construction."}, {"id": "28145", "name": "SAN.N-1 QC Experience Center - 4th Story Wall", "phase": "Construction", "manager": "Emmanuel Bageris", "region": "AMERICAS", "start": "2026-01-01", "end": "2026-09-11", "constStart": "2026-03-01", "cipClose": null, "budget": 600000, "invoiced": 189906, "pct": 31.7, "sqft": 1000, "currency": "USD", "class": "CIP", "status": "6/30/26 EB (Arch: Gensler, GC: Swinerton & BBI) In Construction. "}, {"id": "27255", "name": "SCL.G Server Lab", "phase": "Construction", "manager": "Amanda Arnett", "region": "AMERICAS", "start": "2025-11-10", "end": "2026-09-25", "constStart": "2026-06-22", "cipClose": null, "budget": 750000, "invoiced": 10000, "pct": 1.3, "sqft": 12143, "currency": "USD", "class": "CIP", "status": "07/07/26 AA (D/B Arch:TBD GC:SCB) Palladium team to move equipment by 7/15. Completion date of project set for 9/11.\n\n06/23/26 AA (D/B Arch:TBD GC:SCB) Palladium team to move equipment by 7/15. Completion date of project set for 9/11.\n\n06/09/26 AA (D/B Arch:TBD GC:TBD) SC Builders PO executed. Team meeting to finalize schedule coordination and determine a start date within the month of June. \n\n05/26/26 AA (D/B Arch:TBD GC:TBD) SC Builders PO executed. Scope dialed in and team is working on submittals/shop drawings.  \n\n05/12/26 AA (D/B Arch:TBD GC:TBD) SC Builders PO in process. Finalizing additional end user requests in order to determine official work start date. Aiming for work to start by end of May. \n\n03/31/26 AA (D/B Arch:TBD GC:TBD) Scope documents sent to SC Builders/FM Booth/Elcor for pricing. \n\n03/17/26 AA (D/B Arch:TBD GC:TBD) Scoping. Walked space with QREF team 3/2 to finalize scope discussion. \n\n02/17/26 AA (D/B Arch:TBD GC:TBD) Scoping. Meeting held 2/13 to review scope and team confirming existing conditions/requirements to finalize SOWs. "}, {"id": "27628", "name": "SCL.D Air Compressor", "phase": "Procurement", "manager": "\u2014", "region": "AMERICAS", "start": "2026-06-26", "end": "2026-09-25", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 1920, "pct": 0, "sqft": 11783, "currency": "USD", "class": "CIP", "status": "07/07/2026 AA (MEP team: FM Booth): FM Booth PO executed.  Equipment order being processed/lead times being confirmed. \n\n06/23/2026 AA (MEP team: FM Booth): FM Booth PO Req submitted and routing through workflow. \n\n06/09/2026 AA (MEP team: FM Booth): Budget approved.  FM Booth PO Req ready to submit once questions addressed from FM Booth on the proposal. \n\n05/26/2026 AA (MEP team: FM Booth): Budget approval pending.  FM Booth PO Req ready to submit once budget approved. "}, {"id": "27629", "name": "SAN.IT FY26 Growth, Support, Refresh, ITWS, Fiber", "phase": "Construction", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2025-10-01", "end": "2026-09-30", "constStart": "2025-10-06", "cipClose": "2026-11-20", "budget": 500000, "invoiced": 0, "pct": 0.0, "sqft": 0, "currency": "USD", "class": "CIP", "status": "05/29/26 YC (QC IT) Work underway"}, {"id": "27697", "name": "SAN.IT Lab Infrastructure Upgrade", "phase": "Construction", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2025-10-01", "end": "2026-09-30", "constStart": "2025-10-06", "cipClose": "2025-11-21", "budget": 600000, "invoiced": 0, "pct": 0.0, "sqft": 0, "currency": "USD", "class": "CIP", "status": "05/29/26 YC (QC IT) Work underway"}, {"id": "25746", "name": "SAN.P Upgrade Pumps 5&6 (CIP)", "phase": "Construction", "manager": "Kirk Redding", "region": "AMERICAS", "start": "2026-07-06", "end": "2026-09-30", "constStart": "2026-07-06", "cipClose": "2026-09-30", "budget": 200000, "invoiced": 0, "pct": 0.0, "sqft": 0, "currency": "USD", "class": "CIP", "status": "7/7/26 - KJR (QC:GC) - PO issued to J&B. Pumps on order. "}, {"id": "NC26-0002", "name": "SAN.N-5 Corp Legal Office TI", "phase": "Schematic Design", "manager": "\u2014", "region": "AMERICAS", "start": "2026-05-13", "end": "2026-10-26", "constStart": "2026-07-07", "cipClose": null, "budget": 300000, "invoiced": 0, "pct": 0.0, "sqft": 220, "currency": "USD", "class": "NON-CIP", "status": "7/7/26 RO (Arch-QREF; GC-TBD) - SD in Process [test fit in review, pending Christine Duffy's approval]"}, {"id": "30013", "name": "SAN.N Conference Rm Conversions", "phase": "Construction", "manager": "\u2014", "region": "AMERICAS", "start": "2026-08-03", "end": "2026-10-26", "constStart": "2026-08-17", "cipClose": null, "budget": 2000000, "invoiced": 0, "pct": 0.0, "sqft": 6000, "currency": "USD", "class": "CIP", "status": ""}, {"id": "28044", "name": "HNCHU.B GeoShift & ME Buildout", "phase": "Construction", "manager": "\u2014", "region": "APAC N", "start": "2025-12-26", "end": "2026-10-30", "constStart": "2026-02-20", "cipClose": "2027-01-31", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "TWD", "class": "CIP", "status": ""}, {"id": "28653", "name": "SHNGH.B and D office expansion Project", "phase": "Construction", "manager": "\u2014", "region": "APAC N", "start": "2026-05-04", "end": "2026-11-06", "constStart": "2026-06-05", "cipClose": "2027-02-28", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 45235, "currency": "CNY", "class": "CIP", "status": ""}, {"id": "28654", "name": "SHEZN.E 11F and 12F office expansion project", "phase": "Construction", "manager": "\u2014", "region": "APAC N", "start": "2026-05-01", "end": "2026-11-06", "constStart": "2026-06-05", "cipClose": "2027-02-28", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 35055, "currency": "CNY", "class": "CIP", "status": ""}, {"id": "28454", "name": "HYDRB.E- Cafe Expansion- Ground Floor", "phase": "Procurement", "manager": "\u2014", "region": "APAC S", "start": "2026-01-27", "end": "2026-11-30", "constStart": "2026-03-31", "cipClose": null, "budget": 827999, "invoiced": 0, "pct": 0.0, "sqft": 7243, "currency": "INR", "class": "CIP", "status": "07/07/2026 RB PMC : CBRE & CC : WTP On boarded, Interior GC  : MMoser recommendation received, PO raised and its in approval process.\nWorking with finance team for additional budget approval, due to increase in scope. Finance team approved budget on 29/June."}, {"id": "NC26-0001", "name": "SAN.BB Exhaust Fans", "phase": "Procurement", "manager": "\u2014", "region": "AMERICAS", "start": "2026-05-07", "end": "2026-12-18", "constStart": null, "cipClose": null, "budget": 250000, "invoiced": 4800, "pct": 1.9, "sqft": 0, "currency": "USD", "class": "NON-CIP", "status": "07/07/2026 AA (MEP team: PacRim): Pacific Rim PO Req routing through Workflow. \n\n06/23/2026 AA (MEP team: PacRim): Pacific Rim PO Req submitted and routing through Workflow. \n\n06/09/2026 AA (MEP team: PacRim): Proposal received and in review by team. \n\n05/26/2026 AA (MEP team: PacRim): Proposal due 5/29."}, {"id": "27931", "name": "SCL.A-171 MCFT EOL Upgrades", "phase": "Design Development", "manager": "Amanda Arnett", "region": "AMERICAS", "start": "2026-04-15", "end": "2026-12-31", "constStart": null, "cipClose": null, "budget": 3300000, "invoiced": 365506, "pct": 11.1, "sqft": 0, "currency": "USD", "class": "CIP", "status": "07/07/2026 AA (Design-build: SC Builders/FM Booth/Elcor): Long lead equipment on order and working through work around on a few lead time delays for components of the IRC's. Drawings submitted to the City 6/5 and 1st round of comments anticipated by 7/6 (team following up).  Working through FGMP budget questions. \n\n06/23/2026 AA (Design-build: SC Builders/FM Booth/Elcor): Long lead equipment on order and working through work around on a few lead time delays for components of the IRC's. Drawings submitted to the City 6/5 and 1st round of comments anticipated by 7/5.  Starting piping layout this week. \n\n06/09/2026 AA (Design-build: SC Builders/FM Booth/Elcor): Long lead equipment on order and working through work around on a few lead time delays for components of the IRC's. Drawings submitted to the City 6/5 and 1st round of comments anticipated by 7/5.  \n\n05/26/2026 AA (Design-build: SC Builders/FM Booth/Elcor): SCB contract executed. Drawings in progress and submitted first round last week. Long lead equipment on order. \n\n05/12/2026 AA (Design-build: SC Builders/FM Booth/Elcor): Budget approved 5/4. SCB contract and PO in process. Design drawings have started and long lead equipment to be ordered this week. \n\n03/31/2026 AA (Design-build: SC Builders/FM Booth/Elcor): Budget submitted 2/27. SCB proposal for design/early procurement under review. \n\n03/17/2026 AA (Design-build: SC Builders/FM Booth/Elcor): Budget submitted 2/27. "}, {"id": "28313", "name": "SAN.Q-036 Rolas CPU Lab", "phase": "Design Development", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2026-02-16", "end": "2027-01-25", "constStart": "2026-07-27", "cipClose": null, "budget": 8000000, "invoiced": 112748, "pct": 1.4, "sqft": 3600, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch-Delawie; GC-TBD) - DD in Process [preconstruction and early procurement RFPs in process, potential shift to full DLC/AI instead of ROLAS]"}, {"id": "21308", "name": "SAN.AV-AX Cooling Towers", "phase": "Procurement", "manager": "\u2014", "region": "AMERICAS", "start": "2026-05-06", "end": "2027-01-29", "constStart": null, "cipClose": null, "budget": 2200000, "invoiced": 19620, "pct": 0.9, "sqft": 0, "currency": "USD", "class": "CIP", "status": "07/07/2026 AA (MEP D/B Team: J&B): Award selection made for Jackson & Blanc.  PO req is routing. \n\n06/23/2026 AA (MEP D/B Team: J&B): Award selection made for Jackson & Blanc.  Still waiting on formal budget approval from finance team, but in the meantime scheduling the PEP meeting with J&B for this week and prepping the PO req. \n\n06/09/2026 AA (MEP D/B Team: TBD): RFP for mechanical contractor in process - follow-up question responses in review and aiming to make a selection this week.  \n\n06/09/2026 AA (MEP D/B Team: TBD): RFP for mechanical contractor in process - follow-up question responses in review and aiming to make a selection this week.  \n\n05/26/2026 AA (MEP D/B Team: TBD): RFP for mechanical contractor in process - bids received and aiming to follow-up with bidders this week. "}, {"id": "27261", "name": "VNCVR.A  -  NEW OFFICE", "phase": "Design Development", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2025-09-17", "end": "2027-01-29", "constStart": "2026-02-27", "cipClose": "2027-05-31", "budget": 4000000, "invoiced": 54792, "pct": 1.4, "sqft": 10000, "currency": "CAD", "class": "CIP", "status": "07/21 - 100% DD sets were reviewed / Doc's submitted for permit"}, {"id": "27631", "name": "BLDR.G - TBS Lab Expansion", "phase": "Schematic Design", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2025-09-15", "end": "2027-02-26", "constStart": "2026-05-01", "cipClose": null, "budget": 11200000, "invoiced": 104793, "pct": 0.9, "sqft": 9000, "currency": "USD", "class": "CIP", "status": "5/5 - A|E Design Teams are developing dwgs"}, {"id": "27260", "name": "CANAD.D-K Server Lab", "phase": "Construction", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2026-04-01", "end": "2027-02-26", "constStart": "2026-08-03", "cipClose": "2027-05-31", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 2700, "currency": "CAD", "class": "CIP", "status": ""}, {"id": "27926", "name": "AUS.E 3rd Floor Expansion", "phase": "Design Development", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2026-01-01", "end": "2027-02-26", "constStart": "2026-10-05", "cipClose": null, "budget": 19900000, "invoiced": 229710, "pct": 1.2, "sqft": 60000, "currency": "USD", "class": "CIP", "status": "07/21 - DD sets were reviewed and comments are being picked up"}, {"id": "29740", "name": "SAN.A-118-120 IT Wireless", "phase": "Planning", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2026-05-22", "end": "2027-02-26", "constStart": "2026-10-26", "cipClose": null, "budget": 850000, "invoiced": 0, "pct": 0.0, "sqft": 360, "currency": "USD", "class": "CIP", "status": "06/16/26 YC (A/E: TBD; GC: TBD) Pending QLEO approval"}, {"id": "27258", "name": "KRK.A - Seattle Office", "phase": "Design Development", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2025-09-17", "end": "2027-02-26", "constStart": "2026-06-26", "cipClose": "2027-05-26", "budget": 5900000, "invoiced": 53206, "pct": 0.9, "sqft": 11550, "currency": "USD", "class": "CIP", "status": "07/21 - 100% DD sets were reviewed / Doc's submitted for permit"}, {"id": "27256", "name": "AUS.E Server Lab", "phase": "Design Development", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2025-08-29", "end": "2027-03-01", "constStart": null, "cipClose": null, "budget": 7000000, "invoiced": 157102, "pct": 2.2, "sqft": 6000, "currency": "USD", "class": "CIP", "status": "07/21 - DD sets were reviewed and comments are being picked up"}, {"id": "27252", "name": "SAN.W Refresh", "phase": "Permitting", "manager": "Emmanuel Bageris", "region": "AMERICAS", "start": "2025-07-15", "end": "2027-03-31", "constStart": "2026-10-01", "cipClose": null, "budget": 5400000, "invoiced": 117518, "pct": 2.2, "sqft": 32000, "currency": "USD", "class": "CIP", "status": "6/30/26 EB (Arch: Delawie, GC: DCT) Design Complete. Permitting in Progress. DCT GMP Due 07/01"}, {"id": "28691", "name": "SAN.AQ Complete BMS System Replacement", "phase": "Procurement", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2026-05-04", "end": "2027-05-10", "constStart": "2026-07-06", "cipClose": null, "budget": 1200000, "invoiced": 0, "pct": 0.0, "sqft": 0, "currency": "USD", "class": "CIP", "status": "05/29/26 - YC (GC:TBD) Contractor bids received. Bid evaluation underway."}, {"id": "28526", "name": "RAL.B-514 AI 200-300 Lab", "phase": "Procurement", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2026-07-01", "end": "2027-05-31", "constStart": "2027-01-11", "cipClose": null, "budget": 1300000, "invoiced": 0, "pct": 0.0, "sqft": 723, "currency": "USD", "class": "CIP", "status": "07/21/26 YC (A/E: Hagersmith; GC:TBD) Design development underway"}, {"id": "22712", "name": "SAN.QP DC Chilled Water Storage", "phase": "Construction", "manager": "\u2014", "region": "AMERICAS", "start": "2026-11-02", "end": "2027-05-31", "constStart": "2027-01-04", "cipClose": "2027-06-29", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "USD", "class": "CIP", "status": ""}, {"id": "TBD 20260520-2", "name": "SAN.N Atrium Glazing", "phase": "Planning", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2026-07-06", "end": "2027-06-28", "constStart": "2027-01-04", "cipClose": "2027-08-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 5000, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch-Delawie: GC-TBD) - Scope Development and Budget Request in Process"}, {"id": "27249", "name": "SAN.T Refresh", "phase": "Permitting", "manager": "Emmanuel Bageris", "region": "AMERICAS", "start": "2025-07-15", "end": "2027-06-30", "constStart": "2026-10-01", "cipClose": null, "budget": 13400000, "invoiced": 214822, "pct": 1.6, "sqft": 110000, "currency": "USD", "class": "CIP", "status": "6/30/26 EB (Arch: Delawie, GC: PBG) Design Complete. Permitting in Progress. PBG GMP Due 07/08"}, {"id": "29741", "name": "TIJNA.A Generator-UPS Upgrade", "phase": "Procurement", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2026-05-14", "end": "2027-06-30", "constStart": "2027-02-01", "cipClose": "2028-01-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "USD", "class": "CIP", "status": "05/26/26 YC (GC:TBD) Pending CIP budget approval."}, {"id": "27933", "name": "SAN.W Replace 3 AHU's [Ph2] & EF's @ EOL ", "phase": "Planning", "manager": "\u2014", "region": "AMERICAS", "start": "2026-07-06", "end": "2027-07-30", "constStart": "2026-11-02", "cipClose": "2027-09-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 1, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch0Inhouse; GC- TBD) - Planning in Process"}, {"id": "26110", "name": "SAN.Q Plant Chiller Replacements ", "phase": "Construction", "manager": "\u2014", "region": "AMERICAS", "start": "2026-12-01", "end": "2027-07-30", "constStart": "2027-02-01", "cipClose": "2027-08-31", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "USD", "class": "CIP", "status": ""}, {"id": "28504", "name": "SAN.N-10 Exec Office(s) TI and SCIF", "phase": "Conceptual Design", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2026-07-01", "end": "2027-08-05", "constStart": "2027-01-04", "cipClose": "2027-09-27", "budget": 6000000, "invoiced": 0, "pct": 0.0, "sqft": 5000, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch- Gensler[?]: GC-TBD) - Budget Request in Process [AMEP RFP, QGOV pre-qualification, and budget request in process- pending Heather Ace approval]"}, {"id": "TBD 20260520", "name": "SAN.BF Veloce Expansion + UPS and Static Switches", "phase": "Conceptual Design", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2026-08-06", "end": "2027-08-30", "constStart": "2026-12-02", "cipClose": "2027-10-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 1, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch-TBD: GC-TBD) - Design RFP and Budget Request in Process [EIC deck in production]"}, {"id": "28616", "name": "BNGLO.S - TI (Damascus II)", "phase": "Procurement", "manager": "Boopathi Raja", "region": "APAC S", "start": "2026-12-01", "end": "2027-10-31", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 1050000, "currency": "INR", "class": "CIP", "status": "7/7/2026 (RV): RFP in progress, GC technical presentation is scheduled on 14 - 15 Aug\n\nGC: TBD\nPMC: TBD\nCC: TBD"}, {"id": "TBD 20260515-1", "name": "SAN.W DC Generator Upgrades (Phase-3)", "phase": "Conceptual Design", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2026-08-06", "end": "2027-11-30", "constStart": "2026-12-02", "cipClose": "2028-01-30", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 1, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch-TBD: GC-TBD) - Design RFP and Budget Request in Process [APC feasibility kicked-off]"}, {"id": "28576", "name": "BNGLO.C - Additional Floors", "phase": "Conceptual Design", "manager": "\u2014", "region": "APAC S", "start": "2026-05-01", "end": "2027-12-31", "constStart": "2026-10-01", "cipClose": "2028-07-31", "budget": 0, "invoiced": 0, "pct": 0, "sqft": 34000, "currency": "INR", "class": "CIP", "status": "7/7/2026 (RV): Architect / Design consultancy onboarded, site feasibility study in progress\n\nArchitect: Meinhardt EPCM India Pvt Ltd\nPMC: TBD\nCC: TBD\nGC: TBD"}, {"id": "27243", "name": "SAN.AQ Refresh", "phase": "Design Development", "manager": "Robert Osburn", "region": "AMERICAS", "start": "2025-07-15", "end": "2028-01-31", "constStart": "2027-02-01", "cipClose": null, "budget": 28200000, "invoiced": 134481, "pct": 0.5, "sqft": 200000, "currency": "USD", "class": "CIP", "status": "7/7/26 RO (Arch- Delawie: GC- Dempsey) - DD in Process [GC RFP and elevator study in process]"}, {"id": "28509", "name": "SAN.Q-TBS Pool", "phase": "Planning", "manager": "Yannet Canseco", "region": "AMERICAS", "start": "2026-05-21", "end": "2028-02-25", "constStart": "2027-09-13", "cipClose": null, "budget": 8000000, "invoiced": 0, "pct": 0.0, "sqft": 0, "currency": "USD", "class": "CIP", "status": "05/29/26 YC (GC:TBD; A/E:TBD) Pending QLEO Approval"}, {"id": "27254", "name": "SAN.WT Refresh", "phase": "Planning", "manager": "Emmanuel Bageris", "region": "AMERICAS", "start": "2025-07-15", "end": "2028-06-01", "constStart": "2027-06-01", "cipClose": null, "budget": 33000000, "invoiced": 0, "pct": 0.0, "sqft": 307000, "currency": "USD", "class": "CIP", "status": "6/30/26 EB (Arch: Delawie, GC: BNB) PHASE 2 of Building Refresh Projects. GC Conceptual Budget due 07/08. GC & Design Team Buyout Anticipated June/July 2026"}, {"id": "27245", "name": "SAN.QRC Refresh", "phase": "Planning", "manager": "Emmanuel Bageris", "region": "AMERICAS", "start": "2025-07-15", "end": "2028-08-01", "constStart": "2027-07-01", "cipClose": null, "budget": 27800000, "invoiced": 0, "pct": 0.0, "sqft": 250000, "currency": "USD", "class": "CIP", "status": "6/30/26 EB (Arch: TBD, GC: TBD) PHASE 2 of Building Refresh Projects. IPROC & CIP budget is approved. Planning meetings are in progress."}, {"id": "TBD 20250718", "name": "BRAZL.C Office TI", "phase": "Planning", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2025-09-01", "end": "2028-09-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "BRL", "class": "CIP", "status": ""}, {"id": "27784", "name": "MADRD.A Fitout", "phase": "Construction", "manager": "Karl Bard", "region": "EMEA", "start": "2025-10-22", "end": "2028-09-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 4568, "currency": "EUR", "class": "CIP", "status": ""}, {"id": "TBD 20251202", "name": "CANAD.D Security Office", "phase": "Construction", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2025-11-17", "end": "2028-09-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 600, "currency": "CAD", "class": "CIP", "status": ""}, {"id": "28068", "name": "Netanya Autotalks CIP relocation", "phase": "Construction", "manager": "\u2014", "region": "EMEA", "start": "2026-01-20", "end": "2028-09-30", "constStart": "2026-03-01", "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 2233, "currency": "ILS", "class": "CIP", "status": ""}, {"id": "28482", "name": "RIYAD.C Office Setup", "phase": "Construction", "manager": "\u2014", "region": "EMEA", "start": "2026-04-01", "end": "2028-09-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 16867, "currency": "SAR", "class": "CIP", "status": ""}, {"id": "28483", "name": "ACHEN.A - Office Relocation", "phase": "Construction", "manager": "\u2014", "region": "APAC S", "start": "2026-04-01", "end": "2028-09-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 5705, "currency": "EUR", "class": "CIP", "status": ""}, {"id": "28529", "name": "OTTWA.A Integration Upgrades", "phase": "Construction", "manager": "Brian Gizzi", "region": "AMERICAS", "start": "2026-02-27", "end": "2028-09-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 0, "currency": "CAD", "class": "CIP", "status": "07/21 - Qualnet integration 100% Completed with QREF and IT. Security is working on Card Reader / Camera.  Hayley is working with BMO for Building Signage replacement"}, {"id": "TBD 20260723", "name": "SAN.P-Qualcomm POD", "phase": "Construction", "manager": "\u2014", "region": "AMERICAS", "start": "2026-07-17", "end": "2028-09-30", "constStart": null, "cipClose": null, "budget": 0, "invoiced": 0, "pct": 0, "sqft": 1, "currency": "USD", "class": "CIP", "status": ""}];
+
+// ── Config ──────────────────────────────────────────────────────
+const REGION_ORDER   = ['AMERICAS','APAC N','APAC S','EMEA'];
+const REGION_COLORS  = {AMERICAS:'#3498db','APAC N':'#9b59b6','APAC S':'#e67e22',EMEA:'#2ecc71'};
+const REGION_CSS     = {AMERICAS:'AMERICAS','APAC N':'APAC-N','APAC S':'APAC-S',EMEA:'EMEA'};
+const PHASE_COLORS   = {
+  'Construction':      '#e74c3c',
+  'Design Development':'#3498db',
+  'Schematic Design':  '#9b59b6',
+  'Planning':          '#f39c12',
+  'Procurement':       '#1abc9c',
+  'Permitting':        '#e67e22',
+  'Conceptual Design': '#2ecc71',
+  'Closeout':          '#95a5a6',
+  'Cancelled':         '#4a4a4a',
+  'Unknown':           '#555',
+};
+
+const today     = new Date('2026-07-29');
+const CHART_START = new Date('2025-07-01');
+const CHART_END   = new Date('2029-01-01');
+const TOTAL_DAYS  = (CHART_END - CHART_START) / 86400000;
+
+function daysFrom(d)  { return (new Date(d) - CHART_START) / 86400000; }
+function pct(d)       { return Math.max(0, Math.min(100, daysFrom(d) / TOTAL_DAYS * 100)); }
+function fmtMoney(v)  { if(!v||v===0) return '—'; if(v>=1e6) return '$'+( v/1e6).toFixed(2)+'M'; return '$'+v.toLocaleString(); }
+function fmtDate(s)   { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+
+// ── Build month headers ───────────────────────────────────────
+function buildMonthHeaders() {
+  const months=[];
+  let cur = new Date(CHART_START.getFullYear(), CHART_START.getMonth(), 1);
+  while(cur < CHART_END){
+    const next = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+    const s = Math.max(0,(cur-CHART_START)/86400000);
+    const e = Math.min(TOTAL_DAYS,(next-CHART_START)/86400000);
+    if(e>s) months.push({label:cur.toLocaleDateString('en-US',{month:'short',year:'2-digit'}),left:(s/TOTAL_DAYS*100).toFixed(3),width:((e-s)/TOTAL_DAYS*100).toFixed(3)});
+    cur=next;
+  }
+  return months;
+}
+
+// ── KPIs ─────────────────────────────────────────────────────
+function renderKPIs(data){
+  const total=data.length;
+  const budgetSum=data.reduce((a,p)=>a+(p.budget||0),0);
+  const invSum=data.reduce((a,p)=>a+(p.invoiced||0),0);
+  const sqftSum=data.reduce((a,p)=>a+(p.sqft||0),0);
+  const phaseCounts={};
+  data.forEach(p=>phaseCounts[p.phase]=(phaseCounts[p.phase]||0)+1);
+  const topPhase=Object.entries(phaseCounts).sort((a,b)=>b[1]-a[1])[0];
+  const overallPct=budgetSum>0?Math.round(invSum/budgetSum*100):0;
+  document.getElementById('kpiStrip').innerHTML=`
+    <div class="kpi"><div class="val">${total}</div><div class="lbl">Total Projects</div></div>
+    <div class="kpi"><div class="val">${fmtMoney(budgetSum)}</div><div class="lbl">Total Est. Budget</div></div>
+    <div class="kpi"><div class="val">${fmtMoney(invSum)}</div><div class="lbl">Total Invoiced</div></div>
+    <div class="kpi"><div class="val">${overallPct}%</div><div class="lbl">Budget Velocity</div></div>
+    <div class="kpi"><div class="val">${(sqftSum/1000).toFixed(0)}K</div><div class="lbl">Total Sq Ft</div></div>
+    <div class="kpi"><div class="val">${topPhase?topPhase[0]:'—'}</div><div class="lbl">Top Phase (${topPhase?topPhase[1]:0} projects)</div></div>
+  `;
+}
+
+// ── Legend ────────────────────────────────────────────────────
+function renderLegend(){
+  const items=Object.entries(PHASE_COLORS).map(([k,c])=>`<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${k}</div>`).join('');
+  document.getElementById('legendBox').innerHTML=`<div style="width:100%;font-size:.75rem;color:#5a6a8a;margin-bottom:4px;font-weight:600;">PHASE LEGEND</div>`+items;
+}
+
+// ── Tooltip ───────────────────────────────────────────────────
+const tip=document.getElementById('tooltip');
+function showTip(e,p){
+  tip.innerHTML=`
+    <div class="tt-title">${p.name}</div>
+    <div class="tt-row"><span class="tt-key">Project ID</span><span class="tt-val">${p.id}</span></div>
+    <div class="tt-row"><span class="tt-key">Phase</span><span class="tt-val">${p.phase}</span></div>
+    <div class="tt-row"><span class="tt-key">Region</span><span class="tt-val">${p.region}</span></div>
+    <div class="tt-row"><span class="tt-key">Manager</span><span class="tt-val">${p.manager}</span></div>
+    <div class="tt-row"><span class="tt-key">Start</span><span class="tt-val">${fmtDate(p.start)}</span></div>
+    <div class="tt-row"><span class="tt-key">Est. Const Start</span><span class="tt-val">${fmtDate(p.constStart)}</span></div>
+    <div class="tt-row"><span class="tt-key">Est. Occupancy</span><span class="tt-val">${fmtDate(p.end)}</span></div>
+    <div class="tt-row"><span class="tt-key">CIP Close</span><span class="tt-val">${fmtDate(p.cipClose)}</span></div>
+    <div class="tt-row"><span class="tt-key">Est. Budget</span><span class="tt-val">${fmtMoney(p.budget)}</span></div>
+    <div class="tt-row"><span class="tt-key">Invoiced</span><span class="tt-val">${fmtMoney(p.invoiced)}</span></div>
+    <div class="tt-row"><span class="tt-key">% Invoiced</span><span class="tt-val">${p.pct}%</span></div>
+    <div class="tt-row"><span class="tt-key">Sq Ft</span><span class="tt-val">${p.sqft?p.sqft.toLocaleString():'—'}</span></div>
+    <div class="tt-row"><span class="tt-key">Classification</span><span class="tt-val">${p.class||'—'}</span></div>
+  `;
+  tip.style.display='block';
+  moveTip(e);
+}
+function moveTip(e){
+  const x=e.clientX+14,y=e.clientY-10;
+  tip.style.left=(x+310>window.innerWidth?x-330:x)+'px';
+  tip.style.top =(y+tip.offsetHeight>window.innerHeight?y-tip.offsetHeight-10:y)+'px';
+}
+document.addEventListener('mousemove',e=>{ if(tip.style.display==='block') moveTip(e); });
+
+// ── Main render ───────────────────────────────────────────────
+let allExpanded = true;
+
+function render(data){
+  renderKPIs(data);
+  const container = document.getElementById('ganttContainer');
+  container.innerHTML='';
+  const months = buildMonthHeaders();
+  const todayPct = pct(today);
+
+  REGION_ORDER.forEach(region=>{
+    const rProjects = data.filter(p=>p.region===region);
+    if(!rProjects.length) return;
+    const color = REGION_COLORS[region];
+    const cssClass = REGION_CSS[region];
+    const budgetTot = rProjects.reduce((a,p)=>a+(p.budget||0),0);
+
+    const block = document.createElement('div');
+    block.className = 'region-block';
+    block.dataset.region = region;
+
+    // Region header
+    const hdr = document.createElement('div');
+    hdr.className = `region-header r-${cssClass}`;
+    hdr.style.borderTopColor = color;
+    hdr.innerHTML = `
+      <span style="font-size:1rem">&#9783;</span>
+      <h2>${region}</h2>
+      <span class="cnt">${rProjects.length} projects</span>
+      <span class="bgt">${fmtMoney(budgetTot)} est. budget</span>
+      <span class="chevron" id="chev-${cssClass}">▾</span>`;
+    hdr.onclick = () => toggleRegion(cssClass);
+    block.appendChild(hdr);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'region-body';
+    body.id = `body-${cssClass}`;
+
+    const ganttWrap = document.createElement('div');
+    ganttWrap.className = 'gantt-wrap';
+
+    // Inner
+    const inner = document.createElement('div');
+    inner.className = 'gantt-inner';
+
+    // Month header row
+    const ghdr = document.createElement('div');
+    ghdr.className = 'gantt-header';
+    const glbls = document.createElement('div');
+    glbls.className = 'gantt-labels';
+    glbls.innerHTML = `<div style="padding:3px 8px;font-size:.68rem;color:#5a6a8a">PROJECT</div>`;
+    ghdr.appendChild(glbls);
+
+    const gtl = document.createElement('div');
+    gtl.className = 'gantt-timeline';
+    gtl.style.position='relative';
+    months.forEach(m=>{
+      const md=document.createElement('div');
+      md.className='gantt-month';
+      md.style.left=m.left+'%';
+      md.style.width=m.width+'%';
+      md.style.position='absolute';
+      md.textContent=m.label;
+      gtl.appendChild(md);
+    });
+    gtl.style.height='20px';
+    // FY bands
+    [2025,2026,2027,2028].forEach(fy=>{
+      const fs=new Date(`${fy}-10-01`), fe=new Date(`${fy+1}-09-30`);
+      const l=pct(fs), w=pct(fe)-pct(fs);
+      if(w>0){
+        const band=document.createElement('div');
+        band.style.cssText=`position:absolute;left:${l}%;width:${w}%;top:0;bottom:0;background:${fy%2===0?'rgba(255,255,255,.015)':'rgba(0,0,0,.0)'};pointer-events:none;border-left:1px dashed #1e2a40`;
+        const lbl=document.createElement('div');
+        lbl.style.cssText='position:absolute;top:2px;left:4px;font-size:.58rem;color:#2a3a5c;pointer-events:none';
+        lbl.textContent='FY'+(fy+1);
+        band.appendChild(lbl);
+        gtl.appendChild(band);
+      }
+    });
+    ghdr.appendChild(gtl);
+    inner.appendChild(ghdr);
+
+    // Project rows
+    rProjects.forEach(p=>{
+      const row = document.createElement('div');
+      row.className = 'gantt-row';
+      row.dataset.pid=p.id; row.dataset.name=p.name.toLowerCase();
+      row.dataset.phase=p.phase; row.dataset.mgr=p.manager;
+
+      const label=document.createElement('div');
+      label.className='gantt-label';
+      const phaseCol=PHASE_COLORS[p.phase]||'#555';
+      label.innerHTML=`
+        <span class="pid">${p.id}</span>
+        <span class="pname" title="${p.name}">${p.name}</span>
+        <span class="phase-badge" style="background:${phaseCol}22;color:${phaseCol};border:1px solid ${phaseCol}44">${p.phase}</span>`;
+      row.appendChild(label);
+
+      const barArea=document.createElement('div');
+      barArea.className='gantt-bar-area';
+      barArea.style.position='relative';
+
+      // today line
+      const tl=document.createElement('div');
+      tl.className='today-line';
+      tl.style.left=todayPct+'%';
+      barArea.appendChild(tl);
+
+      // main bar
+      const s=pct(p.start), e2=pct(p.end);
+      const bw=Math.max(0.3,e2-s);
+      const bar=document.createElement('div');
+      bar.className='gantt-bar';
+      bar.style.left=s+'%';
+      bar.style.width=bw+'%';
+      bar.style.background=`linear-gradient(90deg,${phaseCol}dd,${phaseCol}88)`;
+      bar.style.border=`1px solid ${phaseCol}`;
+      bar.style.boxShadow=`0 0 6px ${phaseCol}44`;
+
+      // invoiced fill (dark overlay from right)
+      if(p.budget>0 && p.pct>0){
+        const fill=document.createElement('div');
+        fill.className='inv-fill';
+        fill.style.left=(100-p.pct)+'%';
+        fill.style.width=p.pct+'%';
+        bar.appendChild(fill);
+      }
+
+      const bl=document.createElement('div');
+      bl.className='bar-label';
+      bl.textContent=p.manager!=='—'?p.manager:'';
+      bar.appendChild(bl);
+
+      bar.addEventListener('mouseenter',e=>showTip(e,p));
+      bar.addEventListener('mouseleave',()=>tip.style.display='none');
+      barArea.appendChild(bar);
+
+      // const start marker
+      if(p.constStart){
+        const cs=pct(p.constStart);
+        if(cs>s){
+          const mk=document.createElement('div');
+          mk.style.cssText=`position:absolute;left:${cs}%;top:6px;width:2px;height:20px;background:#ffd700;opacity:.7;border-radius:1px;z-index:5`;
+          mk.title='Est. Construction Start';
+          barArea.appendChild(mk);
+        }
+      }
+
+      row.appendChild(barArea);
+      inner.appendChild(row);
+    });
+
+    ganttWrap.appendChild(inner);
+    body.appendChild(ganttWrap);
+    block.appendChild(body);
+    container.appendChild(block);
+  });
+}
+
+// ── Filters ──────────────────────────────────────────────────
+function populateFilters(){
+  const phases=[...new Set(PROJECTS.map(p=>p.phase))].sort();
+  const regions=[...new Set(PROJECTS.map(p=>p.region))].sort();
+  const mgrs=[...new Set(PROJECTS.map(p=>p.manager).filter(m=>m&&m!=='—'))].sort();
+  const pf=document.getElementById('phaseFilter');
+  phases.forEach(v=>pf.add(new Option(v,v)));
+  const rf=document.getElementById('regionFilter');
+  regions.forEach(v=>rf.add(new Option(v,v)));
+  const mf=document.getElementById('mgrFilter');
+  mgrs.forEach(v=>mf.add(new Option(v,v)));
+}
+
+function filtered(){
+  const q=document.getElementById('searchBox').value.toLowerCase();
+  const ph=document.getElementById('phaseFilter').value;
+  const re=document.getElementById('regionFilter').value;
+  const mg=document.getElementById('mgrFilter').value;
+  return PROJECTS.filter(p=>
+    (!q || p.name.toLowerCase().includes(q)||String(p.id).toLowerCase().includes(q)||p.manager.toLowerCase().includes(q)) &&
+    (!ph || p.phase===ph) &&
+    (!re || p.region===re) &&
+    (!mg || p.manager===mg)
+  );
+}
+
+function applyFilters(){ render(filtered()); renderTable(filtered()); }
+function resetFilters(){
+  ['searchBox','phaseFilter','regionFilter','mgrFilter'].forEach(id=>document.getElementById(id).value='');
+  render(PROJECTS); renderTable(PROJECTS);
+}
+document.getElementById('searchBox').addEventListener('input',applyFilters);
+document.getElementById('phaseFilter').addEventListener('change',applyFilters);
+document.getElementById('regionFilter').addEventListener('change',applyFilters);
+document.getElementById('mgrFilter').addEventListener('change',applyFilters);
+
+// ── Toggle regions ────────────────────────────────────────────
+function toggleRegion(css){
+  const body=document.getElementById(`body-${css}`);
+  const chev=document.getElementById(`chev-${css}`);
+  if(!body) return;
+  if(body.style.maxHeight&&body.style.maxHeight!=='0px'){
+    body.style.maxHeight='0px'; chev.textContent='▸';
+  } else {
+    body.style.maxHeight=body.scrollHeight+'px'; chev.textContent='▾';
+  }
+}
+function toggleAllRegions(){
+  const btn=document.getElementById('toggleAll');
+  allExpanded=!allExpanded;
+  ['AMERICAS','APAC-N','APAC-S','EMEA'].forEach(css=>{
+    const body=document.getElementById(`body-${css}`);
+    const chev=document.getElementById(`chev-${css}`);
+    if(!body) return;
+    if(allExpanded){ body.style.maxHeight=body.scrollHeight+'px'; if(chev) chev.textContent='▾'; }
+    else           { body.style.maxHeight='0px';                   if(chev) chev.textContent='▸'; }
+  });
+  btn.textContent = allExpanded ? '⊟ Collapse All' : '⊞ Expand All';
+}
+
+// ── Project Register Table ────────────────────────────────────
+function renderTable(data){
+  const sorted=[...data].sort((a,b)=>{
+    const ro=REGION_ORDER;
+    if(ro.indexOf(a.region)!==ro.indexOf(b.region)) return ro.indexOf(a.region)-ro.indexOf(b.region);
+    return new Date(a.start)-new Date(b.start);
+  });
+  const tbody=document.getElementById('regBody');
+  tbody.innerHTML='';
+  sorted.forEach((p,i)=>{
+    const rc=REGION_COLORS[p.region]||'#555';
+    const pc=PHASE_COLORS[p.phase]||'#555';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="font-weight:600;color:#7ec8e3">${p.id}</td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.name}">${p.name}</td>
+      <td><span style="color:${rc};font-weight:600">${p.region}</span></td>
+      <td><span class="phase-badge" style="background:${pc}22;color:${pc};border:1px solid ${pc}44">${p.phase}</span></td>
+      <td>${p.manager}</td>
+      <td>${fmtDate(p.start)}</td>
+      <td>${fmtDate(p.end)}</td>
+      <td>${fmtDate(p.cipClose)}</td>
+      <td class="num">${fmtMoney(p.budget)}</td>
+      <td class="num">${fmtMoney(p.invoiced)}</td>
+      <td class="progress-cell">
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="progress-bg" style="flex:1"><div class="progress-fill" style="width:${Math.min(100,p.pct)}%"></div></div>
+          <span style="font-size:.7rem;color:#aaa;min-width:32px">${p.pct}%</span>
+        </div>
+      </td>
+      <td class="num">${p.sqft?p.sqft.toLocaleString():'—'}</td>
+      <td style="color:#8a9ac0">${p.class||'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────
+populateFilters();
+renderLegend();
+render(PROJECTS);
+renderTable(PROJECTS);
+
+// expand all bodies after render
+setTimeout(()=>{
+  ['AMERICAS','APAC-N','APAC-S','EMEA'].forEach(css=>{
+    const body=document.getElementById(`body-${css}`);
+    if(body) body.style.maxHeight=body.scrollHeight+'px';
+  });
+},100);
+</script>
+</body>
+</html>
